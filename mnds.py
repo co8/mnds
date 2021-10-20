@@ -20,73 +20,58 @@ from discord_webhook import DiscordWebhook
 class mnds:
     """co8/mnds - Mysterium Node Discord Status"""
 
-    _discord_url = "https://discord.com/api/webhooks/900191773463285781/JImKIdRo2UXqDvRp5QtZplsABYGn8ndWorokgsaalq1rF_IUi51mpCWYtAvDDtmJf7UW"
+    _config = {}
+    _discord_url = ""
     _curl_url = "curl -s http://localhost:4050/"
 
+    def curl_tool(self, path):
+        output = os.popen(self._curl_url + path).read()
+        return json.loads(output)
+
+    ###load config.json vars
+    def load_config(self):
+        with open("config.json") as json_data_file:
+            self._config = json.load(json_data_file)
+        self.set_discord_url()
+
+    def set_discord_url(self):
+        self._discord_url = self._config["discord_url"]
+
+    def get_mmn_report(self):
+        return self.curl_tool("mmn/report")
+
     def get_services(self):
-        # return os.popen(self._curl_url + "services").read()
-        output = [
-            {
-                "provider_id": "0xb7ae946600e80eca0d50869ea06fc8c0b53d304c",
-                "type": "wireguard",
-                "status": "Running",
-                "proposal": {
-                    "price": {
-                        "currency": "MYSTT",
-                        "per_hour": 114042996843727,
-                        "per_gib": 228085993687453980,
-                    },
-                },
-            },
-        ]
+        output = self.curl_tool("services")
         return output[0]
 
     def get_stats(self):
-        # output = os.popen(self._curl_url + "sessions/stats-aggregated").read()
-        output = {
-            "stats": {
-                "count": 1488,
-                "count_consumers": 717,
-                "sum_bytes_received": 149290392763,
-                "sum_bytes_sent": 14802564239,
-                "sum_duration": 15173349,
-                "sum_tokens": 35793641406550526275,
-            }
-        }
+        output = self.curl_tool("sessions/stats-aggregated")
         output["stats"]["earnings"] = str(
             self.nice_myst_amount(output["stats"]["sum_tokens"], 4)
         )
         return output["stats"]
 
     def get_healthcheck(self):
-        # return os.popen(self._curl_url + "healthcheck").read()
-        output = {
-            "uptime": "4h39m49.968940602s",
-            "version": "0.67.2",
-        }
-        return output
+        return self.curl_tool("healthcheck")
 
     def get_version(self):
-        healthcheck = self.get_healthcheck()
-        return healthcheck["version"]
+        output = self.get_healthcheck()
+        return output["version"]
 
     def services_mnds(self):
         services = self.get_services()
         per_hour_places = 6
         per_gib_places = 4
         return {
-            # "provider_id": services["provider_id"],
             "provider_id": services["provider_id"][0:7],  # first 7 char of Node ID
             "status": services["status"].upper(),
-            "type": services["type"].upper(),
+            "type": services["type"].capitalize(),
             "currency": services["proposal"]["price"]["currency"],
-            # "per_hour": services["proposal"]["price"]["per_hour"],
             "per_hour": str(
                 self.nice_myst_amount(
                     services["proposal"]["price"]["per_hour"], per_hour_places
                 )
             ),
-            # "per_gib": services["proposal"]["price"]["per_gib"],
             "per_gib": str(
                 self.nice_myst_amount(
                     services["proposal"]["price"]["per_gib"], per_gib_places
@@ -101,45 +86,59 @@ class mnds:
         niceNum = 0.000000000000000001
         return self.truncate(amt * niceNum, places)
 
+    def format_usd(self, amt):
+        return "{:.2f}".format(amt)
+
     def discord_message(self):
         services = self.services_mnds()
         stats = self.get_stats()
         version = self.get_version()
-        # print(type(stats["earnings"]))
-        # exit()
+        mmn_report = self.get_mmn_report()
         output = (
-            "Node: **"
-            + services["provider_id"]
+            "**"
+            # "Node: **"
+            + mmn_report["name"]
+            # + services["provider_id"]
             # + "** Status: **"
             + "** / **"
             + services["status"]
             # + "** Earnings: **"
-            + "** / **"
-            + stats["earnings"]
-            + " MYST**"
-            + "\n"
-            + "Version: **"
+            + "** / v"
             + version
-            + "**  / "
+            # + "**"
+            + "\n"
+            + "Bounty: **#"
+            + str(mmn_report["report"]["position_residential"])
+            + " / "
+            + mmn_report["report"]["balance_residential_tokens"]
+            + " ($"
+            + self.format_usd(mmn_report["report"]["balance_residential_usd"])
+            + ")**"
+            + "\n"
+            + "Earnings: "
+            + stats["earnings"]
+            + " "
+            + services["currency"]
+            + " / "
             + "Sessions: "
             + str(stats["count"])
             # + " / "
             # + str(stats["count_consumers"])
             + "\n"
-            # + "Service: "
-            + services["type"]
+            + "Rate: "
+            # + services["type"] # Wireguard
             + " `"
             + services["per_hour"]
-            + "`/hr + "
+            + "/hr` + `"
             + services["per_gib"]
-            + "/GiB"
-            # + services["currency"]
+            + "/GiB`"
         )
         return output
 
     ##############################
     def __init__(self):
         """init"""
+        self.load_config()
         message = self.discord_message()
         # print(message)
         _discord_url = self._discord_url
