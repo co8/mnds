@@ -7,9 +7,9 @@ from discord_webhook import DiscordWebhook
 
 ########
 # Install Python PIP3
-# sudo apt-get -y install python3-pip
+# $ sudo apt-get -y install python3-pip
 # install Discord-Webhook module
-# % pip3 install discord-webhook
+# $ pip3 install discord-webhook
 #
 # CRONTAB
 # run script every 3 hours
@@ -24,35 +24,47 @@ class mnds:
     _discord_url = ""
     _curl_url = "curl -s http://localhost:4050/"
 
-    def curl_tool(self, path):
+    def curl_tequila(self, path):
         output = os.popen(self._curl_url + path).read()
         return json.loads(output)
 
-    ###load config.json vars
     def load_config(self):
         with open("config.json") as json_data_file:
             self._config = json.load(json_data_file)
-        self.set_discord_url()
-
-    def set_discord_url(self):
         self._discord_url = self._config["discord_url"]
 
     def get_mmn_report(self):
-        return self.curl_tool("mmn/report")
+        output = self.curl_tequila("mmn/report")
+        bounty = {}
+        if bool(output["report"]["position_residential_eligible"]):
+            bounty = {
+                "position": str(output["report"]["position_residential"]),
+                "tokens": output["report"]["balance_residential_tokens"],
+                "usd": self.format_usd(output["report"]["balance_residential_usd"]),
+            }
+        else:
+            bounty = {
+                "position": str(output["report"]["position_global"]),
+                "tokens": output["report"]["balance_global_tokens"],
+                "usd": self.format_usd(output["report"]["balance_global_usd"]),
+            }
+        output["bounty"] = bounty
+        return output
 
     def get_services(self):
-        output = self.curl_tool("services")
+        output = self.curl_tequila("services")
         return output[0]
 
+    # not used until mainnet
     def get_stats(self):
-        output = self.curl_tool("sessions/stats-aggregated")
+        output = self.curl_tequila("sessions/stats-aggregated")
         output["stats"]["earnings"] = str(
-            self.nice_myst_amount(output["stats"]["sum_tokens"], 4)
+            self.nice_myst_amount(output["stats"]["sum_tokens"])
         )
         return output["stats"]
 
     def get_healthcheck(self):
-        return self.curl_tool("healthcheck")
+        return self.curl_tequila("healthcheck")
 
     def get_version(self):
         output = self.get_healthcheck()
@@ -60,80 +72,61 @@ class mnds:
 
     def services_mnds(self):
         services = self.get_services()
-        per_hour_places = 6
-        per_gib_places = 4
         return {
-            "provider_id": services["provider_id"][0:7],  # first 7 char of Node ID
-            "status": services["status"].upper(),
+            "provider_id": services["provider_id"],
+            "status": services["status"],
             "type": services["type"].capitalize(),
             "currency": services["proposal"]["price"]["currency"],
             "per_hour": str(
-                self.nice_myst_amount(
-                    services["proposal"]["price"]["per_hour"], per_hour_places
-                )
+                self.nice_myst_amount(services["proposal"]["price"]["per_hour"])
             ),
             "per_gib": str(
-                self.nice_myst_amount(
-                    services["proposal"]["price"]["per_gib"], per_gib_places
-                )
+                self.nice_myst_amount(services["proposal"]["price"]["per_gib"])
             ),
         }
 
-    def truncate(self, f, n):
-        return math.floor(f * 10 ** n) / 10 ** n
-
-    def nice_myst_amount(self, amt, places):
-        niceNum = 0.000000000000000001
-        return self.truncate(amt * niceNum, places)
+    def nice_myst_amount(self, amt):
+        output = amt * 0.000000000000000001
+        if output > 0.001:
+            return "{:.4f}".format(output).rstrip("0")
+        else:
+            return "{:.6f}".format(output).rstrip("0")
 
     def format_usd(self, amt):
         return "{:.2f}".format(amt)
 
+    def node_name(self, name, provider_id):
+        if len(name) > 20:
+            return provider_id[0:7]
+        else:
+            return name
+
     def discord_message(self):
         services = self.services_mnds()
-        stats = self.get_stats()
         version = self.get_version()
         mmn_report = self.get_mmn_report()
-        output = (
-            "**"
-            # "Node: **"
-            + mmn_report["name"]
-            # + services["provider_id"]
-            # + "** Status: **"
-            + "** / **"
+        return (
+            "🤖 **"
+            + self.node_name(mmn_report["name"], services["provider_id"])
+            + "** / "
             + services["status"]
-            # + "** Earnings: **"
-            + "** / v"
+            + " / v"
             + version
-            # + "**"
             + "\n"
-            + "Bounty: **#"
-            + str(mmn_report["report"]["position_residential"])
-            + " / "
-            + mmn_report["report"]["balance_residential_tokens"]
-            + " ($"
-            + self.format_usd(mmn_report["report"]["balance_residential_usd"])
-            + ")**"
+            + "Bounty: #"
+            + mmn_report["bounty"]["position"]
+            + " / **"
+            + mmn_report["bounty"]["tokens"]
+            + "** ($"
+            + mmn_report["bounty"]["usd"]
+            + ")"
             + "\n"
-            + "Earnings: "
-            + stats["earnings"]
-            + " "
-            + services["currency"]
-            + " / "
-            + "Sessions: "
-            + str(stats["count"])
-            # + " / "
-            # + str(stats["count_consumers"])
-            + "\n"
-            + "Rate: "
-            # + services["type"] # Wireguard
-            + " `"
+            + "Rate: `"
             + services["per_hour"]
             + "/hr` + `"
             + services["per_gib"]
             + "/GiB`"
         )
-        return output
 
     ##############################
     def __init__(self):
@@ -141,8 +134,8 @@ class mnds:
         self.load_config()
         message = self.discord_message()
         # print(message)
-        _discord_url = self._discord_url
-        webhook = DiscordWebhook(url=_discord_url, content=message)
+        # _discord_url = self._discord_url
+        webhook = DiscordWebhook(url=self._discord_url, content=message)
         webhook_response = webhook.execute()
         print(webhook_response.reason)
 
