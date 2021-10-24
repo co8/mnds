@@ -13,6 +13,7 @@ from discord_webhook import DiscordWebhook
 #
 # CRONTAB
 # run script every 3 hours
+# $ crontab -e
 # 0 */3 * * * cd ~/mnds; python3 mnds.py >> cron.log 2>&1
 ########
 
@@ -22,10 +23,10 @@ class mnds:
 
     _config = {}
     _discord_url = ""
-    _curl_url = "curl -s http://localhost:4050/"
+    _api_route = "http://localhost:4050/"
 
-    def curl_tequila(self, path):
-        output = os.popen(self._curl_url + path).read()
+    def curl_tequila(self, endpoint):
+        output = os.popen("curl -s " + self._api_route + endpoint).read()
         return json.loads(output)
 
     def load_config(self):
@@ -51,10 +52,6 @@ class mnds:
         output["bounty"] = bounty
         return output
 
-    def get_services(self):
-        output = self.curl_tequila("services")
-        return output[0]
-
     # not used until mainnet
     def get_stats(self):
         output = self.curl_tequila("sessions/stats-aggregated")
@@ -70,8 +67,9 @@ class mnds:
         output = self.get_healthcheck()
         return output["version"]
 
-    def services_mnds(self):
-        services = self.get_services()
+    def get_services(self):
+        output = self.curl_tequila("services")
+        services = output[0]
         return {
             "provider_id": services["provider_id"],
             "status": services["status"],
@@ -102,39 +100,40 @@ class mnds:
             return name
 
     def discord_message(self):
-        services = self.services_mnds()
+        services = self.get_services()
         version = self.get_version()
         mmn_report = self.get_mmn_report()
+        stats = self.get_stats()
         return (
             "🤖 **"
             + self.node_name(mmn_report["name"], services["provider_id"])
-            + "** / "
+            + "** . "
             + services["status"]
-            + " / v"
+            + " . v"
             + version
             + "\n"
-            + "Bounty: #"
-            + mmn_report["bounty"]["position"]
-            + " / **"
             + mmn_report["bounty"]["tokens"]
-            + "** ($"
-            + mmn_report["bounty"]["usd"]
-            + ")"
+            # + " ($"
+            # + mmn_report["bounty"]["usd"]
+            # + ")"
+            + ", #"
+            + mmn_report["bounty"]["position"]
+            + ", "
+            + str(stats["count"])
+            + " Sessions"
             + "\n"
-            + "Rate: `"
+            + "Rate:  "
             + services["per_hour"]
-            + "/hr` + `"
+            + "/hr + "
             + services["per_gib"]
-            + "/GiB`"
+            + "/GiB"
         )
 
     ##############################
     def __init__(self):
-        """init"""
+        """mnds init"""
         self.load_config()
         message = self.discord_message()
-        # print(message)
-        # _discord_url = self._discord_url
         webhook = DiscordWebhook(url=self._discord_url, content=message)
         webhook_response = webhook.execute()
         print(webhook_response.reason)

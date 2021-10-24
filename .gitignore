@@ -1,8 +1,5 @@
 config.json
-get_services.json
-stats_aggregated.json
-devdata-mnds.py
-mmn-report.json
+calls.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
