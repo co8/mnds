@@ -34,6 +34,13 @@ class mnds:
             self._config = json.load(json_data_file)
         self._discord_url = self._config["discord_url"]
 
+    def sizeof_fmt(self, num, suffix="B"):
+        for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
+            if abs(num) < 1024.0:
+                return f"{num:3.1f} {unit}{suffix}"
+            num /= 1024.0
+        return f"{num:.1f} Yi{suffix}"
+
     def get_mmn_report(self):
         output = self.curl_tequila("mmn/report")
         bounty = {}
@@ -58,6 +65,9 @@ class mnds:
         output["stats"]["earnings"] = str(
             self.nice_myst_amount(output["stats"]["sum_tokens"])
         )
+        output["stats"]["transfer"] = self.sizeof_fmt(
+            output["stats"]["sum_bytes_received"] + output["stats"]["sum_bytes_sent"]
+        )
         return output["stats"]
 
     def get_healthcheck(self):
@@ -70,9 +80,14 @@ class mnds:
     def get_services(self):
         output = self.curl_tequila("services")
         services = output[0]
+        status = (
+            "ACTIVE"
+            if services["status"] == "Running"
+            else "{services['status']}".upper()
+        )
         return {
             "provider_id": services["provider_id"],
-            "status": services["status"],
+            "status": status,
             "type": services["type"].capitalize(),
             "currency": services["proposal"]["price"]["currency"],
             "per_hour": str(
@@ -107,20 +122,23 @@ class mnds:
         return (
             "🤖 **"
             + self.node_name(mmn_report["name"], services["provider_id"])
-            + "** . "
-            + services["status"]
-            + " . v"
-            + version
-            + "\n"
+            + "**, #"
+            + mmn_report["bounty"]["position"]
+            + ", "
             + mmn_report["bounty"]["tokens"]
             # + " ($"
             # + mmn_report["bounty"]["usd"]
             # + ")"
-            + ", #"
-            + mmn_report["bounty"]["position"]
+            + "\n"
+            + services["status"]
+            + ", v"
+            + version
             + ", "
             + str(stats["count"])
             + " Sessions"
+            + ", "
+            + stats["transfer"]
+            # + " Transferred"
             + "\n"
             + "Rate:  "
             + services["per_hour"]
