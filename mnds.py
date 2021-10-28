@@ -12,9 +12,11 @@ from discord_webhook import DiscordWebhook
 # $ pip3 install discord-webhook
 #
 # CRONTAB
-# run script every 3 hours
+# run script every 3 or 6 hours
 # $ crontab -e
 # 0 */3 * * * cd ~/mnds; python3 mnds.py >> cron.log 2>&1
+# or
+# 0 */6 * * * cd ~/mnds; python3 mnds.py >> cron.log 2>&1
 ########
 
 
@@ -100,10 +102,8 @@ class mnds:
 
     def nice_myst_amount(self, amt):
         output = amt * 0.000000000000000001
-        if output > 0.001:
-            return "{:.4f}".format(output).rstrip("0")
-        else:
-            return "{:.6f}".format(output).rstrip("0")
+        places = "{:.4f}" if output > 0.001 else "{:.6f}"
+        return places.format(output).rstrip("0")
 
     def format_usd(self, amt):
         return "{:.2f}".format(amt)
