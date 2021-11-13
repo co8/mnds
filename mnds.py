@@ -83,7 +83,7 @@ class mnds:
         output = self.curl_tequila("services")
         services = output[0]
         status = (
-            "ACTIVE"
+            "Active"
             if services["status"] == "Running"
             else "{services['status']}".upper()
         )
@@ -122,22 +122,24 @@ class mnds:
         return (
             "🤖 **"
             + self.node_name(mmn_report["name"], services["provider_id"])
+            + "**, v"
+            + version
+            + ", "
+            + services["status"]
+            + "\n"
+            + "**"
+            + mmn_report["bounty"]["tokens"]
             + "**, #"
             + mmn_report["bounty"]["position"]
-            + ", "
-            + mmn_report["bounty"]["tokens"]
             # + " ($"
             # + mmn_report["bounty"]["usd"]
             # + ")"
-            + "\n"
-            + services["status"]
-            + ", v"
-            + version
-            + ", "
-            + str(stats["count"])
-            + " Sessions"
-            + ", "
-            + stats["transfer"]
+            # + "\n"
+            # + ", "
+            # + str(stats["count"])
+            # + " Sessions"
+            # + ", "
+            # + stats["transfer"]
             # + " Transferred"
             + "\n"
             + "Rate:  "
